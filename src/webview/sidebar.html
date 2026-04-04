@@ -33,11 +33,41 @@
         opacity: 0.6;
       }
 
+      .search-box {
+        width: 100%;
+        margin-top: 10px;
+        padding: 6px 8px;
+        font-size: 12px;
+        font-family: var(--vscode-font-family);
+        color: var(--vscode-input-foreground);
+        background: var(--vscode-input-background);
+        border: 1px solid var(--vscode-input-border, transparent);
+        border-radius: 4px;
+        outline: none;
+      }
+
+      .search-box:focus {
+        border-color: var(--vscode-focusBorder);
+      }
+
+      .search-box::placeholder {
+        color: var(--vscode-input-placeholderForeground);
+      }
+
       .loading {
         text-align: center;
         opacity: 0.5;
         padding: 24px 0;
         font-size: 11px;
+      }
+
+      .error-message {
+        text-align: center;
+        padding: 24px 12px;
+        font-size: 12px;
+        opacity: 0.7;
+        line-height: 1.6;
+        color: var(--vscode-errorForeground);
       }
 
       .component-grid {
@@ -58,28 +88,7 @@
         border-color: var(--vscode-focusBorder);
       }
 
-      .card-preview {
-        width: 100%;
-        aspect-ratio: 16 / 9;
-        background: var(--vscode-input-background);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-      }
-
-      .card-preview video {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-      }
-
-      .preview-placeholder {
-        font-size: 28px;
-        opacity: 0.3;
-        user-select: none;
-      }
+      /* Preview styles removed — Phase 2 API does not include previews */
 
       .card-body {
         padding: 10px 12px 12px;
@@ -88,14 +97,7 @@
       .card-title {
         font-size: 13px;
         font-weight: 600;
-        margin-bottom: 3px;
-      }
-
-      .card-description {
-        font-size: 11px;
-        opacity: 0.65;
-        line-height: 1.5;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
       }
 
       .tags {
@@ -158,11 +160,17 @@
     <!-- ── Header ─────────────────────────────────────────────────── -->
     <div class="header">
       <h1>⚡ Aceternity UI</h1>
-      <p id="component-count">Loading components...</p>
+      <p id="component-count">Fetching components...</p>
+      <input
+        type="text"
+        id="search-box"
+        class="search-box"
+        placeholder="🔍 Search components..."
+      />
     </div>
     
     <div class="component-grid" id="component-grid">
-      <div class="loading">Loading components...</div>
+      <div class="loading">Fetching from Aceternity UI...</div>
     </div>
 
     <script nonce="NONCE_PLACEHOLDER">
@@ -175,6 +183,11 @@
         switch (message.command) {
           case "loadComponents":
             renderComponents(message.components);
+            break;
+
+          // ── Offline / network error — show a friendly message ────────
+          case "fetchError":
+            showError(message.message);
             break;
 
           // ── Handle inject result sent back from extension ──────────
@@ -212,13 +225,29 @@
         }
       });
 
+      // ── Keep a reference to all components for search filtering ───
+      let allComponents = [];
+
       // ── Render all cards ───────────────────────────────────────────
       function renderComponents(components) {
+        allComponents = components; // store for filtering
+        const searchBox = document.getElementById("search-box");
+        searchBox.value = ""; // reset search on fresh load
+        displayCards(components);
+      }
+
+      // ── Display a list of component cards in the grid ──────────────
+      function displayCards(components) {
         const grid = document.getElementById("component-grid");
         const countEl = document.getElementById("component-count");
 
         countEl.textContent = components.length + " components available";
         grid.innerHTML = "";
+
+        if (components.length === 0) {
+          grid.innerHTML = '<div class="loading">No components match your search.</div>';
+          return;
+        }
 
         components.forEach((component) => {
           const card = buildCard(component);
@@ -226,29 +255,32 @@
         });
       }
 
+      // ── Real-time search filtering ─────────────────────────────────
+      document.getElementById("search-box").addEventListener("input", (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        if (!query) {
+          displayCards(allComponents);
+          return;
+        }
+        const filtered = allComponents.filter((c) =>
+          c.name.toLowerCase().includes(query) ||
+          c.title.toLowerCase().includes(query)
+        );
+        displayCards(filtered);
+      });
+
+      // ── Show error/offline state ──────────────────────────────────
+      function showError(msg) {
+        const grid = document.getElementById("component-grid");
+        const countEl = document.getElementById("component-count");
+        countEl.textContent = "Offline";
+        grid.innerHTML = '<div class="error-message">⚠️ ' + msg + '</div>';
+      }
+
       // ── Build a single card ────────────────────────────────────────
       function buildCard(component) {
         const card = document.createElement("div");
         card.className = "card";
-
-        // Preview
-        const preview = document.createElement("div");
-        preview.className = "card-preview";
-
-        if (component.previewUrl) {
-          const video = document.createElement("video");
-          video.src = component.previewUrl;
-          video.autoplay = true;
-          video.loop = true;
-          video.muted = true;
-          video.setAttribute("playsinline", "");
-          preview.appendChild(video);
-        } else {
-          const placeholder = document.createElement("span");
-          placeholder.className = "preview-placeholder";
-          placeholder.textContent = "▦";
-          preview.appendChild(placeholder);
-        }
 
         // Body
         const body = document.createElement("div");
@@ -257,10 +289,6 @@
         const title = document.createElement("div");
         title.className = "card-title";
         title.textContent = component.title;
-
-        const description = document.createElement("div");
-        description.className = "card-description";
-        description.textContent = component.description;
 
         // Dependency tags
         const tags = document.createElement("div");
@@ -295,10 +323,8 @@
         });
 
         body.appendChild(title);
-        body.appendChild(description);
         body.appendChild(tags);
         body.appendChild(btn);
-        card.appendChild(preview);
         card.appendChild(body);
 
         return card;

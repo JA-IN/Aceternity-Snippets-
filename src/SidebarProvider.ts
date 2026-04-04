@@ -1,7 +1,17 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { Registry } from "./types";
+import {
+  RegistryIndex,
+  RegistryIndexItem,
+  ComponentDetail,
+  SidebarComponent,
+} from "./types";
+
+// ── Base URL for Aceternity's public shadcn-style registry ────────────
+const REGISTRY_INDEX_URL = "https://ui.aceternity.com/registry";
+const REGISTRY_COMPONENT_URL = (name: string) =>
+  `https://ui.aceternity.com/registry/${name}.json`;
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
 
@@ -12,14 +22,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "aceternityUI.sidebar";
 
   private _view?: vscode.WebviewView;
-  private _registry?: Registry;
 
-  constructor(private readonly _extensionUri: vscode.Uri) {
-    // ── Load registry ONCE at construction time, not on every
-    //    resolveWebviewView call. This is more efficient and means
-    //    we always have the data ready regardless of webview lifecycle.
-    this._registry = this._loadRegistry();
-  }
+  // ── In-memory cache of the registry index so we don't re-fetch
+  //    every time the sidebar toggles. Cleared on window reload.
+  private _cachedIndex?: RegistryIndexItem[];
+
+  constructor(private readonly _extensionUri: vscode.Uri) {}
 
   public resolveWebviewView(webviewView: vscode.WebviewView) {
     // Store the current view reference — always update it
@@ -53,8 +61,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
           case "ready":
             // Webview JS has loaded and is ready to receive data.
-            // Send the registry immediately.
-            this._sendRegistryToWebview(webviewView.webview);
+            // Fetch from the Aceternity registry and send the result.
+            this._fetchAndSendRegistry(webviewView.webview);
             break;
 
           case "inject":
@@ -70,39 +78,74 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  // ── Reads registry from disk once and caches it ───────────────────────
-  private _loadRegistry(): Registry | undefined {
-    try {
-      const registryPath = path.join(
-        this._extensionUri.fsPath,
-        "src",
-        "registry.json"
-      );
-      return JSON.parse(fs.readFileSync(registryPath, "utf8"));
-    } catch (err) {
-      vscode.window.showErrorMessage(
-        `Aceternity UI: Failed to load registry.json — ${err}`
-      );
-      return undefined;
-    }
-  }
-
-  // ── Posts registry data into the webview ─────────────────────────────
-  private _sendRegistryToWebview(webview: vscode.Webview) {
-    if (!this._registry) {
-      vscode.window.showErrorMessage(
-        "Aceternity UI: Registry is not loaded."
-      );
+  // ── Fetches the registry index and sends it to the webview ──────────
+  // Uses an in-memory cache so we only hit the network once per session.
+  // If the fetch fails (offline), sends an error to the webview which
+  // displays an offline message instead of component cards.
+  private async _fetchAndSendRegistry(webview: vscode.Webview) {
+    // Return from cache if we already have it
+    if (this._cachedIndex) {
+      webview.postMessage({
+        command: "loadComponents",
+        components: this._mapIndexToCards(this._cachedIndex),
+      });
       return;
     }
 
-    webview.postMessage({
-      command: "loadComponents",
-      components: this._registry.components,
-    });
+    try {
+      const response = await fetch(REGISTRY_INDEX_URL);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = (await response.json()) as RegistryIndex;
+      this._cachedIndex = data.items;
+
+      webview.postMessage({
+        command: "loadComponents",
+        components: this._mapIndexToCards(data.items),
+      });
+    } catch (err) {
+      // ── Offline or network error — tell the webview to show an
+      //    offline message instead of component cards.
+      webview.postMessage({
+        command: "fetchError",
+        message: "You are offline or not connected to the internet.",
+      });
+      vscode.window.showErrorMessage(
+        `Aceternity UI: Failed to fetch components — ${err}`
+      );
+    }
+  }
+
+  // ── Converts raw registry index items into the card shape the
+  //    webview expects. Generates a display title from the slug name
+  //    (e.g., "bento-grid" → "Bento Grid").
+  private _mapIndexToCards(items: RegistryIndexItem[]): SidebarComponent[] {
+    return items.map((item) => ({
+      name: item.name,
+      title: this._slugToTitle(item.name),
+      dependencies: item.dependencies ?? [],
+    }));
+  }
+
+  // ── "bento-grid" → "Bento Grid", "3d-card" → "3D Card" ────────────
+  private _slugToTitle(slug: string): string {
+    return slug
+      .split("-")
+      .map((word) => {
+        // Keep fully numeric tokens (like "3d") uppercase
+        if (/^\d/.test(word)) {
+          return word.toUpperCase();
+        }
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
+      .join(" ");
   }
 
   // ── Injects a component's files into the workspace ───────────────────
+  // Phase 2: Fetches full source code from /registry/[name].json on demand,
+  // rather than reading from a local registry.json.
   private async _injectComponent(
     componentName: string,
     webview: vscode.Webview
@@ -112,33 +155,28 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       vscode.window.showErrorMessage(
         "Aceternity UI: Please open a project folder first."
       );
-      // ── Reset the webview button — this path never reaches injectResult ──
       this._resetInjectButton(webview, componentName);
       return;
     }
     const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
-    if (!this._registry) {
+    // ── Fetch the full component detail (source code) from the API ────
+    let component: ComponentDetail;
+    try {
+      const response = await fetch(REGISTRY_COMPONENT_URL(componentName));
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      component = (await response.json()) as ComponentDetail;
+    } catch (err) {
       vscode.window.showErrorMessage(
-        "Aceternity UI: Registry is not loaded."
+        `Aceternity UI: Failed to fetch "${componentName}" — ${err}`
       );
       this._resetInjectButton(webview, componentName);
       return;
     }
 
-    const component = this._registry.components.find(
-      (c) => c.name === componentName
-    );
-
-    if (!component) {
-      vscode.window.showErrorMessage(
-        `Aceternity UI: Component "${componentName}" not found.`
-      );
-      this._resetInjectButton(webview, componentName);
-      return;
-    }
-
-    // ── Step 6: Ensure lib/utils.ts exists before writing any files ────────
+    // ── Ensure lib/utils.ts exists before writing any files ───────────
     // All Aceternity components rely on the cn() helper from lib/utils.ts.
     // We create it automatically if absent so users don't hit a red import
     // error immediately after injection.
@@ -147,6 +185,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const writtenPaths: string[] = [];
 
     for (const file of component.files) {
+      // The API returns paths like "components/ui/bento-grid.tsx"
       const targetPath = path.join(workspaceRoot, file.path);
       const targetDir = path.dirname(targetPath);
 
@@ -189,22 +228,28 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     // modal: true is required — the `detail` subtitle only renders in modal
     // dialogs, and non-modal toasts can be silently dismissed before the
     // user sees the buttons. This is a deliberate one-time decision anyway.
-    const pm = this._detectPackageManager(workspaceRoot);
-    const depList = component.dependencies.join(" ");
-    const choice = await vscode.window.showInformationMessage(
-      `✅ ${component.title} injected!`,
-      { modal: true, detail: `Install dependencies now?\n${pm} install ${depList}` },
-      "Install",
-      "Skip"
-    );
+    const deps = component.dependencies ?? [];
+    if (deps.length > 0) {
+      const pm = this._detectPackageManager(workspaceRoot);
+      const depList = deps.join(" ");
+      const displayTitle = component.title ?? this._slugToTitle(componentName);
+      const choice = await vscode.window.showInformationMessage(
+        `✅ ${displayTitle} injected!`,
+        { modal: true, detail: `Install dependencies now?\n${pm} install ${depList}` },
+        "Install",
+        "Skip"
+      );
 
-    if (choice === "Install") {
-      // ── Open an integrated terminal and run the install command ─────
-      // createTerminal + sendText is the VS Code-idiomatic way to do this;
-      // it lets the user see output and interact if prompted.
-      const terminal = vscode.window.createTerminal("Aceternity UI: Install");
-      terminal.show(true); // true = preserve focus on the editor
-      terminal.sendText(`${pm} install ${depList}`);
+      if (choice === "Install") {
+        const terminal = vscode.window.createTerminal("Aceternity UI: Install");
+        terminal.show(true);
+        terminal.sendText(`${pm} install ${depList}`);
+      }
+    } else {
+      const displayTitle = component.title ?? this._slugToTitle(componentName);
+      vscode.window.showInformationMessage(
+        `✅ ${displayTitle} injected! No extra dependencies needed.`
+      );
     }
   }
 
