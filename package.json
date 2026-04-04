@@ -1,0 +1,67 @@
+{
+  "name": "aceternity-ui-manager",
+  "displayName": "aceternity-ui-manager",
+  "description": "Browse and inject Aceternity UI components into your project",
+  "version": "0.0.1",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.107.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+        {
+            "command": "aceternity-ui-manager.helloWorld",
+            "title": "Hello World"
+        }
+    ],
+    "viewsContainers": {
+        "activitybar": [
+            {
+                "id": "aceternity-ui-sidebar",
+                "title": "Aceternity UI",
+                "icon": "media/icon.svg"
+            }
+        ]
+    },
+    "views": {
+        "aceternity-ui-sidebar": [
+            {
+                "type": "webview",
+                "id": "aceternityUI.sidebar",
+                "name": "Component Browser"
+            }
+        ]
+    }
+},
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.107.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "typescript-eslint": "^8.56.1",
+    "eslint": "^9.39.3",
+    "esbuild": "^0.25.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.9.3",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}

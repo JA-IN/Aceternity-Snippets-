@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aceternity UI</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        padding: 12px;
+        color: var(--vscode-foreground);
+        font-family: var(--vscode-font-family);
+        background-color: var(--vscode-sideBar-background);
+        font-size: 12px;
+      }
+
+      .header {
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--vscode-panel-border);
+      }
+
+      .header h1 {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        margin-bottom: 2px;
+      }
+
+      .header p {
+        font-size: 11px;
+        opacity: 0.6;
+      }
+
+      .loading {
+        text-align: center;
+        opacity: 0.5;
+        padding: 24px 0;
+        font-size: 11px;
+      }
+
+      .component-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .card {
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--vscode-editor-background);
+        transition: border-color 0.15s ease;
+      }
+
+      .card:hover {
+        border-color: var(--vscode-focusBorder);
+      }
+
+      .card-preview {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: var(--vscode-input-background);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+
+      .card-preview video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .preview-placeholder {
+        font-size: 28px;
+        opacity: 0.3;
+        user-select: none;
+      }
+
+      .card-body {
+        padding: 10px 12px 12px;
+      }
+
+      .card-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 3px;
+      }
+
+      .card-description {
+        font-size: 11px;
+        opacity: 0.65;
+        line-height: 1.5;
+        margin-bottom: 10px;
+      }
+
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 10px;
+      }
+
+      .tag {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: var(--vscode-badge-background);
+        color: var(--vscode-badge-foreground);
+        opacity: 0.85;
+      }
+
+      .inject-btn {
+        width: 100%;
+        padding: 7px 0;
+        background: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.2px;
+        transition: background 0.1s ease;
+      }
+
+      .inject-btn:hover {
+        background: var(--vscode-button-hoverBackground);
+      }
+
+      /* ── "injecting" = temporary loading state while round-trip runs ── */
+      .inject-btn.injecting {
+        background: var(--vscode-button-secondaryBackground);
+        color: var(--vscode-button-secondaryForeground);
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
+
+      /* ── "inject-again" = fully active, inverted colours to signal reuse ── */
+      .inject-btn.inject-again {
+        background: var(--vscode-button-secondaryBackground);
+        color: var(--vscode-button-secondaryForeground);
+        cursor: pointer;
+        opacity: 1;
+      }
+
+      .inject-btn.inject-again:hover {
+        background: var(--vscode-button-secondaryHoverBackground);
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- ── Header ─────────────────────────────────────────────────── -->
+    <div class="header">
+      <h1>⚡ Aceternity UI</h1>
+      <p id="component-count">Loading components...</p>
+    </div>
+    
+    <div class="component-grid" id="component-grid">
+      <div class="loading">Loading components...</div>
+    </div>
+
+    <script nonce="NONCE_PLACEHOLDER">
+
+      const vscode = acquireVsCodeApi();
+
+      // ── Receive data from SidebarProvider.ts ──────────────────────
+      window.addEventListener("message", (event) => {
+        const message = event.data;
+        switch (message.command) {
+          case "loadComponents":
+            renderComponents(message.components);
+            break;
+
+          // ── Handle inject result sent back from extension ──────────
+          // Your SidebarProvider already sends this — we handle it here
+          // to update the button state after a successful inject.
+          case "injectResult":
+            // ── Inject is done. Move button from "injecting" → "inject-again".
+            // Remove the temporary loading class, restore full interactivity.
+            if (message.success) {
+              const btn = document.getElementById(
+                "btn-" + message.componentName
+              );
+              if (btn) {
+                btn.textContent = "🔄 Inject Again";
+                btn.classList.remove("injecting");
+                btn.classList.add("inject-again");
+                btn.disabled = false;
+              }
+            }
+            break;
+
+          // ── Fired by every early-return path in _injectComponent ──────
+          // Restores the button to idle so it's never permanently frozen.
+          case "resetButton": {
+            const btn = document.getElementById(
+              "btn-" + message.componentName
+            );
+            if (btn) {
+              btn.textContent = "⬇ Inject Component";
+              btn.classList.remove("injecting", "inject-again");
+              btn.disabled = false;
+            }
+            break;
+          }
+        }
+      });
+
+      // ── Render all cards ───────────────────────────────────────────
+      function renderComponents(components) {
+        const grid = document.getElementById("component-grid");
+        const countEl = document.getElementById("component-count");
+
+        countEl.textContent = components.length + " components available";
+        grid.innerHTML = "";
+
+        components.forEach((component) => {
+          const card = buildCard(component);
+          grid.appendChild(card);
+        });
+      }
+
+      // ── Build a single card ────────────────────────────────────────
+      function buildCard(component) {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        // Preview
+        const preview = document.createElement("div");
+        preview.className = "card-preview";
+
+        if (component.previewUrl) {
+          const video = document.createElement("video");
+          video.src = component.previewUrl;
+          video.autoplay = true;
+          video.loop = true;
+          video.muted = true;
+          video.setAttribute("playsinline", "");
+          preview.appendChild(video);
+        } else {
+          const placeholder = document.createElement("span");
+          placeholder.className = "preview-placeholder";
+          placeholder.textContent = "▦";
+          preview.appendChild(placeholder);
+        }
+
+        // Body
+        const body = document.createElement("div");
+        body.className = "card-body";
+
+        const title = document.createElement("div");
+        title.className = "card-title";
+        title.textContent = component.title;
+
+        const description = document.createElement("div");
+        description.className = "card-description";
+        description.textContent = component.description;
+
+        // Dependency tags
+        const tags = document.createElement("div");
+        tags.className = "tags";
+        component.dependencies.forEach((dep) => {
+          const tag = document.createElement("span");
+          tag.className = "tag";
+          tag.textContent = dep;
+          tags.appendChild(tag);
+        });
+
+        // Inject button
+        // We give it a unique id so the injectResult handler can find it
+        const btn = document.createElement("button");
+        btn.className = "inject-btn";
+        btn.id = "btn-" + component.name;
+        btn.textContent = "⬇ Inject Component";
+        btn.addEventListener("click", () => {
+          // ── Immediately show loading state for instant UI feedback.
+          // We disable the button to prevent double-clicks during the
+          // async round-trip (file write + terminal install prompt).
+          // The injectResult handler will re-enable it when done.
+          btn.textContent = "⏳ Injecting...";
+          btn.classList.remove("inject-again");
+          btn.classList.add("injecting");
+          btn.disabled = true;
+
+          vscode.postMessage({
+            command: "inject",
+            componentName: component.name,
+          });
+        });
+
+        body.appendChild(title);
+        body.appendChild(description);
+        body.appendChild(tags);
+        body.appendChild(btn);
+        card.appendChild(preview);
+        card.appendChild(body);
+
+        return card;
+      }
+
+      // ── Signal readiness to SidebarProvider.ts ─────────────────────
+      // Your provider listens for this "ready" message before sending
+      // the registry data. This prevents a race condition where
+      // postMessage fires before the webview JS has finished loading.
+      vscode.postMessage({ command: "ready" });
+
+    </script>
+
+  </body>
+</html>

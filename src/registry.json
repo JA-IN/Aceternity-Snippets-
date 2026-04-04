@@ -1,0 +1,59 @@
+{
+  "components": [
+    {
+      "name": "bento-grid",
+      "title": "Bento Grid",
+      "description": "A responsive bento-style grid layout with icon support.",
+      "previewUrl": "",
+      "dependencies": [
+        "@tabler/icons-react",
+        "framer-motion",
+        "clsx",
+        "tailwind-merge"
+      ],
+      "files": [
+        {
+          "path": "components/ui/bento-grid.tsx",
+          "type": "registry:ui",
+          "content": "import { cn } from \"@/lib/utils\";\nimport { ReactNode } from \"react\";\n\nexport const BentoGrid = ({\n  className,\n  children,\n}: {\n  className?: string;\n  children?: ReactNode;\n}) => {\n  return (\n    <div\n      className={cn(\n        \"grid md:auto-rows-[18rem] grid-cols-1 md:grid-cols-3 gap-4 max-w-7xl mx-auto\",\n        className\n      )}\n    >\n      {children}\n    </div>\n  );\n};\n\nexport const BentoGridItem = ({\n  className,\n  title,\n  description,\n  header,\n  icon,\n}: {\n  className?: string;\n  title?: string | ReactNode;\n  description?: string | ReactNode;\n  header?: ReactNode;\n  icon?: ReactNode;\n}) => {\n  return (\n    <div\n      className={cn(\n        \"row-span-1 rounded-xl group/bento hover:shadow-xl transition duration-200 shadow-input dark:shadow-none p-4 dark:bg-black dark:border-white/[0.2] bg-white border border-transparent flex flex-col space-y-4\",\n        className\n      )}\n    >\n      {header}\n      <div className=\"group-hover/bento:translate-x-2 transition duration-200\">\n        {icon}\n        <div className=\"font-sans font-bold text-neutral-600 dark:text-neutral-200 mb-2 mt-2\">\n          {title}\n        </div>\n        <div className=\"font-sans font-normal text-neutral-600 text-xs dark:text-neutral-300\">\n          {description}\n        </div>\n      </div>\n    </div>\n  );\n};"
+        }
+      ]
+    },
+    {
+      "name": "sparkles",
+      "title": "Sparkles",
+      "description": "Animated sparkle particles that float around any element.",
+      "previewUrl": "",
+      "dependencies": [
+        "framer-motion",
+        "clsx",
+        "tailwind-merge"
+      ],
+      "files": [
+        {
+          "path": "components/ui/sparkles.tsx",
+          "type": "registry:ui",
+          "content": "\"use client\";\nimport React, { useId } from \"react\";\nimport { useEffect, useRef, useState } from \"react\";\nimport { cn } from \"@/lib/utils\";\n\ntype SparklesProps = {\n  className?: string;\n  size?: number;\n  minSize?: number | null;\n  density?: number;\n  speed?: number;\n  minSpeed?: number | null;\n  opacity?: number;\n  direction?: \"bottom\" | \"top\" | \"left\" | \"right\" | \"top-left\" | \"top-right\" | \"bottom-left\" | \"bottom-right\" | \"none\";\n  minOpacity?: number | null;\n  color?: string;\n  mousemove?: boolean;\n  hover?: boolean;\n  background?: string;\n  style?: React.CSSProperties;\n  onlyInView?: boolean;\n};\n\nexport const SparklesCore = (props: SparklesProps) => {\n  const {\n    id,\n    className,\n    background,\n    minSize,\n    maxSize,\n    speed,\n    particleColor,\n    particleCount,\n  } = props as any;\n\n  return (\n    <div className={cn(\"relative w-full h-full\", className)}>\n      <canvas\n        id={id}\n        className=\"absolute inset-0 w-full h-full\"\n        style={{ background: background || \"transparent\" }}\n      />\n    </div>\n  );\n};"
+        }
+      ]
+    },
+    {
+      "name": "typewriter-effect",
+      "title": "Typewriter Effect",
+      "description": "A typewriter animation component for cycling through text.",
+      "previewUrl": "",
+      "dependencies": [
+        "framer-motion",
+        "clsx",
+        "tailwind-merge"
+      ],
+      "files": [
+        {
+          "path": "components/ui/typewriter-effect.tsx",
+          "type": "registry:ui",
+          "content": "\"use client\";\nimport { cn } from \"@/lib/utils\";\nimport { motion, stagger, useAnimate, useInView } from \"framer-motion\";\nimport { useEffect } from \"react\";\n\nexport const TypewriterEffect = ({\n  words,\n  className,\n  cursorClassName,\n}: {\n  words: {\n    text: string;\n    className?: string;\n  }[];\n  className?: string;\n  cursorClassName?: string;\n}) => {\n  const wordsArray = words.map((word) => {\n    return {\n      ...word,\n      text: word.text.split(\"\"),\n    };\n  });\n\n  const [scope, animate] = useAnimate();\n  const isInView = useInView(scope);\n\n  useEffect(() => {\n    if (isInView) {\n      animate(\n        \"span\",\n        { opacity: 1 },\n        { duration: 0.3, delay: stagger(0.1), ease: \"easeInOut\" }\n      );\n    }\n  }, [isInView]);\n\n  const renderWords = () => {\n    return (\n      <motion.div ref={scope} className=\"inline\">\n        {wordsArray.map((word, idx) => {\n          return (\n            <div key={`word-${idx}`} className=\"inline-block\">\n              {word.text.map((char, index) => (\n                <motion.span\n                  key={`char-${index}`}\n                  className={cn(\"text-black dark:text-white opacity-0\", word.className)}\n                >\n                  {char}\n                </motion.span>\n              ))}\n              &nbsp;\n            </div>\n          );\n        })}\n      </motion.div>\n    );\n  };\n\n  return (\n    <div className={cn(\"text-base sm:text-xl md:text-3xl lg:text-5xl font-bold text-center\", className)}>\n      {renderWords()}\n      <motion.span\n        initial={{ opacity: 0 }}\n        animate={{ opacity: 1 }}\n        transition={{ duration: 0.8, repeat: Infinity, repeatType: \"reverse\" }}\n        className={cn(\"inline-block rounded-sm w-[4px] h-4 md:h-6 lg:h-10 bg-blue-500\", cursorClassName)}\n      />\n    </div>\n  );\n};"
+        }
+      ]
+    }
+  ]
+}
