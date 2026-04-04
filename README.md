@@ -1,71 +1,42 @@
-# aceternity-ui-manager README
+# Aceternity Snippets
 
-This is the README for your extension "aceternity-ui-manager". After writing up a brief description, we recommend including the following sections.
+This is a VS Code extension for managing and injecting Aceternity UI snippets directly into your projects.
 
-## Features
+## Current Work Status (As of Latest Update)
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **Initialization**: The VS Code extension foundation has been set up successfully.
+- **Webview Sidebar**: A custom sidebar UI has been registered (`aceternityUI.sidebar`) where the available snippets and components will be displayed.
+- **Component Injection Core**: The foundational logic is implemented to inject Aceternity UI components into the user's workspace. This includes the automatic creation of the required `lib/utils.ts` and configuring the `twMerge`/`clsx` setup.
+- **Commands**: A basic "Hello World" command (`aceternity-ui-manager.helloWorld`) is registered for initial testing.
+- **Repository Setup**: The code has been successfully pushed to the GitHub repository. You can view the live repository here: [Aceternity-Snippets-](https://github.com/JA-IN/Aceternity-Snippets-).
 
-For example if there is an image subfolder under your extension project workspace:
+## How to Start and Run the Extension
 
-\!\[feature X\]\(images/feature-x.png\)
+### Setup
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+1. Open the project folder (`d:\programming\Projects\vs_code_Extention`) in VS Code.
+2. Open a terminal within VS Code and install the necessary dependencies:
+   ```bash
+   npm install
+   ```
 
-## Requirements
+### Get up and running straight away
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+1. Press `F5` on your keyboard. This opens a new top-level VS Code window with your extension loaded (known as the Extension Development Host).
+2. The **Aceternity Snippets** sidebar will be available in the activity bar (look for the custom icon).
+3. You can also run the test command by opening the command palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac) and typing `Hello World`.
+4. Any `console.log` statements within the extension code will output to the VS Code Debug Console in your main window.
 
-## Extension Settings
+### Making Changes and Debugging
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+1. Make your changes to the TypeScript code in the `src/` directory (e.g., `src/extension.ts` or `src/SidebarProvider.ts`).
+2. Reload the Extension Development Host window (press `Ctrl+R` or `Cmd+R` on Mac in the host window) to load your changes instantly. Alternatively, you can use the restart button on the debug toolbar in your main VS Code window.
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
+- None currently identified.
 
 ## Following extension guidelines
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+Ensure that you follow the best practices for creating your extension:
+* [VS Code Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
