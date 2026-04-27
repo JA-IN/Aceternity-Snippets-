@@ -8,10 +8,28 @@ import {
   SidebarComponent,
 } from "./types";
 
+// ── Global mapping for components whose registry names differ from their slugs
+const SLUG_OVERRIDES: Record<string, string> = {
+  "grid": "layout-grid",
+  "moving-line": "tracing-beam",
+  "glowing-stars": "glowing-stars-background",
+  "parallax-scroll-2": "hero-parallax",
+  "lamp": "lamp-effect",
+  "3d-card": "3d-card-effect",
+  "input": "placeholders-and-vanish-input",
+  "label": "text-generate-effect",
+  "globe": "github-globe",
+  "shooting-stars": "shooting-stars-and-meteors",
+  "stars-background": "stars-background",
+  "cover": "container-cover",
+};
+
 // ── Base URL for Aceternity's public shadcn-style registry ────────────
 const REGISTRY_INDEX_URL = "https://ui.aceternity.com/registry";
-const REGISTRY_COMPONENT_URL = (name: string) =>
-  `https://ui.aceternity.com/registry/${name}.json`;
+const REGISTRY_COMPONENT_URL = (name: string) => {
+  const slug = SLUG_OVERRIDES[name] || name;
+  return `https://ui.aceternity.com/registry/${slug}.json`;
+};
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
 
@@ -63,6 +81,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             // Webview JS has loaded and is ready to receive data.
             // Fetch from the Aceternity registry and send the result.
             this._fetchAndSendRegistry(webviewView.webview);
+            break;
+
+          case "openDocs":
+            if (message.componentName) {
+              const docSlug = SLUG_OVERRIDES[message.componentName] || message.componentName;
+              const url = `https://ui.aceternity.com/components/${docSlug}`;
+              vscode.env.openExternal(vscode.Uri.parse(url));
+            }
+            break;
+
+          case "viewSource":
+            if (message.componentName) {
+              this._viewSource(message.componentName, webviewView.webview);
+            }
             break;
 
           case "inject":
@@ -143,6 +175,32 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       .join(" ");
   }
 
+  // ── Fetches the component source code to view without injecting ─────────
+  private async _viewSource(componentName: string, webview: vscode.Webview) {
+    try {
+      const response = await fetch(REGISTRY_COMPONENT_URL(componentName));
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const component = (await response.json()) as ComponentDetail;
+      
+      webview.postMessage({
+        command: "showSource",
+        componentName,
+        files: component.files,
+      });
+    } catch (err) {
+      vscode.window.showErrorMessage(
+        `Aceternity UI: Failed to fetch source for "${componentName}" — ${err}`
+      );
+      // Reset the button state in case it was stuck on loading
+      webview.postMessage({
+        command: "resetSourceButton",
+        componentName,
+      });
+    }
+  }
+
   // ── Injects a component's files into the workspace ───────────────────
   // Phase 2: Fetches full source code from /registry/[name].json on demand,
   // rather than reading from a local registry.json.
@@ -209,6 +267,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     if (writtenPaths.length === 0) {
       // ── User cancelled all overwrites — nothing was written.
       // We must reset the button here; injectResult will never be sent.
+      vscode.window.showInformationMessage("Aceternity UI: Injection cancelled. No files were modified.");
       this._resetInjectButton(webview, componentName);
       return;
     }

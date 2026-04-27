@@ -1,9 +1,14 @@
 {
-  "name": "aceternity-ui-manager",
-  "displayName": "aceternity-ui-manager",
+  "name": "aceternity-ui-snippets",
+  "displayName": "Aceternity UI Snippets",
   "description": "Browse and inject Aceternity UI components into your project",
-  "version": "0.0.1",
-  "publisher": "your-publisher-name",
+  "version": "0.0.2",
+  "publisher": "jaindev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JA-IN/Aceternity-Snippets-"
+  },
+  "icon": "media/logo.png",
   "engines": {
     "vscode": "^1.107.0"
   },
@@ -39,6 +44,7 @@
     }
 },
   "scripts": {
+    "publish-extension": "vsce publish patch",
     "vscode:prepublish": "npm run package",
     "compile": "npm run check-types && npm run lint && node esbuild.js",
     "watch": "npm-run-all -p watch:*",

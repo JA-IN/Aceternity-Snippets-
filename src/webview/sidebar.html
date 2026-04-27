@@ -138,8 +138,36 @@
         opacity: 0.85;
       }
 
+      .card-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .icon-btn {
+        padding: 6px 8px;
+        background: var(--vscode-button-secondaryBackground);
+        color: var(--vscode-button-secondaryForeground);
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.1s ease;
+      }
+
+      .icon-btn:hover {
+        background: var(--vscode-button-secondaryHoverBackground);
+      }
+
+      .icon-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
       .inject-btn {
-        width: 100%;
+        flex: 1;
         padding: 7px 0;
         background: var(--vscode-button-background);
         color: var(--vscode-button-foreground);
@@ -210,6 +238,66 @@
         user-select: none;
         z-index: 1001;
       }
+
+      /* ── Source Lightbox ── */
+      .source-lightbox {
+        display: none;
+        position: fixed;
+        z-index: 2000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: var(--vscode-editor-background);
+        padding: 20px;
+        flex-direction: column;
+      }
+      .source-lightbox.active {
+        display: flex;
+      }
+      .source-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--vscode-panel-border);
+      }
+      .source-header h2 {
+        font-size: 14px;
+        margin: 0;
+      }
+      .source-close {
+        cursor: pointer;
+        font-size: 24px;
+        line-height: 1;
+        opacity: 0.8;
+      }
+      .source-close:hover {
+        opacity: 1;
+      }
+      .source-content {
+        flex: 1;
+        overflow-y: auto;
+        background: var(--vscode-textCodeBlock-background, rgba(0,0,0,0.1));
+        padding: 12px;
+        border-radius: 6px;
+      }
+      .source-file {
+        margin-bottom: 16px;
+      }
+      .source-file-path {
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: var(--vscode-textLink-foreground);
+      }
+      .source-file pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-family: var(--vscode-editor-font-family);
+        font-size: 11px;
+      }
     </style>
   </head>
   <body>
@@ -234,6 +322,15 @@
     <div id="lightbox" class="lightbox">
       <span class="lightbox-close">&times;</span>
       <img id="lightbox-img" src="" alt="Popup Preview" />
+    </div>
+
+    <!-- ── Lightbox / Modal for Source Code ── -->
+    <div id="source-lightbox" class="source-lightbox">
+      <div class="source-header">
+        <h2 id="source-title">Source Code</h2>
+        <span class="source-close" id="source-close">&times;</span>
+      </div>
+      <div class="source-content" id="source-content"></div>
     </div>
 
     <script nonce="NONCE_PLACEHOLDER">
@@ -281,6 +378,49 @@
             if (btn) {
               btn.textContent = "⬇ Inject Component";
               btn.classList.remove("injecting", "inject-again");
+              btn.disabled = false;
+            }
+            break;
+          }
+
+          case "showSource": {
+            const btn = document.getElementById("src-btn-" + message.componentName);
+            if (btn) {
+              btn.innerHTML = "📄";
+              btn.disabled = false;
+            }
+            
+            const sourceLightbox = document.getElementById("source-lightbox");
+            const sourceContent = document.getElementById("source-content");
+            const sourceTitle = document.getElementById("source-title");
+            
+            sourceTitle.textContent = message.componentName + " Source";
+            sourceContent.innerHTML = "";
+            
+            message.files.forEach(f => {
+              const fileDiv = document.createElement("div");
+              fileDiv.className = "source-file";
+              
+              const pathDiv = document.createElement("div");
+              pathDiv.className = "source-file-path";
+              pathDiv.textContent = f.path;
+              
+              const pre = document.createElement("pre");
+              pre.textContent = f.content;
+              
+              fileDiv.appendChild(pathDiv);
+              fileDiv.appendChild(pre);
+              sourceContent.appendChild(fileDiv);
+            });
+            
+            sourceLightbox.classList.add("active");
+            break;
+          }
+          
+          case "resetSourceButton": {
+            const btn = document.getElementById("src-btn-" + message.componentName);
+            if (btn) {
+              btn.innerHTML = "📄";
               btn.disabled = false;
             }
             break;
@@ -350,10 +490,9 @@
         preview.className = "card-preview";
 
         // Construct Supabase image URL directly from component name
-        // No API call needed — pattern is predictable
         const supabaseUrl = "https://rcsiefshuenmbpxbosdr.supabase.co";
-        const bucketPath = "storage/v1/object/public/aceternity-previews";
-        const imageUrl = `${supabaseUrl}/${bucketPath}/${component.name}.png`;
+        const bucketPath = "storage/v1/object/public/aceternity-videos";
+        const imageUrl = `${supabaseUrl}/${bucketPath}/${component.name}.gif`;
 
         const img = document.createElement("img");
         img.src = imageUrl;
@@ -397,6 +536,37 @@
           tags.appendChild(tag);
         });
 
+        // Actions container
+        const actions = document.createElement("div");
+        actions.className = "card-actions";
+
+        // View Docs button
+        const docsBtn = document.createElement("button");
+        docsBtn.className = "icon-btn";
+        docsBtn.title = "View Documentation";
+        docsBtn.innerHTML = "🌐";
+        docsBtn.addEventListener("click", () => {
+          vscode.postMessage({
+            command: "openDocs",
+            componentName: component.name,
+          });
+        });
+
+        // View Source button
+        const sourceBtn = document.createElement("button");
+        sourceBtn.className = "icon-btn";
+        sourceBtn.id = "src-btn-" + component.name;
+        sourceBtn.title = "View Source Code";
+        sourceBtn.innerHTML = "📄";
+        sourceBtn.addEventListener("click", () => {
+          sourceBtn.innerHTML = "⏳";
+          sourceBtn.disabled = true;
+          vscode.postMessage({
+            command: "viewSource",
+            componentName: component.name,
+          });
+        });
+
         // Inject button
         // We give it a unique id so the injectResult handler can find it
         const btn = document.createElement("button");
@@ -419,9 +589,13 @@
           });
         });
 
+        actions.appendChild(docsBtn);
+        actions.appendChild(sourceBtn);
+        actions.appendChild(btn);
+
         body.appendChild(title);
         body.appendChild(tags);
-        body.appendChild(btn);
+        body.appendChild(actions);
         card.appendChild(preview);
         card.appendChild(body);
 
@@ -434,12 +608,26 @@
       // postMessage fires before the webview JS has finished loading.
       vscode.postMessage({ command: "ready" });
 
-      // ── Lightbox Close Handler ─────────────────────────────────────
+      // ── Lightbox Close Handlers ─────────────────────────────────────
       const lightbox = document.getElementById('lightbox');
       lightbox.addEventListener('click', function(e) {
         // Close if click is outside the image or on the close button
         if (e.target !== document.getElementById('lightbox-img')) {
           this.classList.remove('active');
+        }
+      });
+
+      const sourceLightbox = document.getElementById('source-lightbox');
+      const sourceClose = document.getElementById('source-close');
+      
+      sourceClose.addEventListener('click', () => {
+        sourceLightbox.classList.remove('active');
+      });
+      
+      sourceLightbox.addEventListener('click', function(e) {
+        // Close if clicked directly on the overlay background
+        if (e.target === sourceLightbox) {
+          sourceLightbox.classList.remove('active');
         }
       });
 
